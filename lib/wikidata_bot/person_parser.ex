@@ -1,4 +1,4 @@
-defmodule WikidataBot.MovieParser do
+defmodule WikidataBot.PersonParser do
   alias GraphqlBuilder.Query
 
   @language_mappings %{
@@ -81,23 +81,23 @@ defmodule WikidataBot.MovieParser do
     "zu" => "zu-ZA"
   }
 
-  def import_movies do
-    Application.get_env(:wikidata_bot, :file_path, "results.json")
+  def import_persons do
+    Application.get_env(:wikidata_bot, :file_path, "results_ids.json")
     |> File.stream!([:trim_bom])
     |> Stream.map(&parse_json/1)
     |> Stream.reject(&is_nil/1)
-    |> Stream.map(&parse_movie/1)
-    |> Stream.map(&create_movie/1)
+    |> Stream.map(&parse_person/1)
+    |> Stream.map(&create_person/1)
     |> Stream.run()
   end
 
-  def create_movie({data, relations}) do
+  def create_person(data) do
     Map.get(data, "wikidata_id")
     |> get_item()
     |> case do
       nil ->
         WikidataBot.Client.create_item(
-          "film",
+          "person",
           data
         )
 
@@ -111,143 +111,19 @@ defmodule WikidataBot.MovieParser do
 
         IO.puts("Updated #{Map.get(data, "wikidata_id")}")
     end
-
-    process_relations(Map.get(data, "wikidata_id") |> get_item(), relations)
-  end
-
-  def process_relations(nil, _relations), do: nil
-
-  def process_relations(uid, relations) do
-    # Director
-    (Map.get(relations, "director") || [])
-    |> Enum.map(fn director ->
-      act_uid = WikidataBot.PersonParser.get_item(director)
-
-      # Exists? Create crew
-      if act_uid do
-        WikidataBot.Client.create_item(
-          "crew",
-          %{
-            "film" => uid,
-            "person" => act_uid,
-            "job" => "director"
-          }
-        )
-      end
-    end)
-
-    # writer
-    (Map.get(relations, "writer") || [])
-    |> Enum.map(fn writer ->
-      act_uid = WikidataBot.PersonParser.get_item(writer)
-
-      # Exists? Create crew
-      if act_uid do
-        WikidataBot.Client.create_item(
-          "crew",
-          %{
-            "film" => uid,
-            "person" => act_uid,
-            "job" => "writer"
-          }
-        )
-      end
-    end)
-
-    # producer
-    (Map.get(relations, "producer") || [])
-    |> Enum.map(fn producer ->
-      act_uid = WikidataBot.PersonParser.get_item(producer)
-
-      # Exists? Create crew
-      if act_uid do
-        WikidataBot.Client.create_item(
-          "crew",
-          %{
-            "film" => uid,
-            "person" => act_uid,
-            "job" => "producer"
-          }
-        )
-      end
-    end)
-
-    # exec_producer
-    (Map.get(relations, "exec_producer") || [])
-    |> Enum.map(fn exec_producer ->
-      act_uid = WikidataBot.PersonParser.get_item(exec_producer)
-
-      # Exists? Create crew
-      if act_uid do
-        WikidataBot.Client.create_item(
-          "crew",
-          %{
-            "film" => uid,
-            "person" => act_uid,
-            "job" => "executive_producer"
-          }
-        )
-      end
-    end)
-
-    # cast
-    (Map.get(relations, "cast") || [])
-    |> Enum.map(fn cast ->
-      act_uid = WikidataBot.PersonParser.get_item(cast)
-
-      # Exists? Create cast
-      if act_uid do
-        WikidataBot.Client.create_item(
-          "performance",
-          %{
-            "film" => uid,
-            "person" => act_uid
-          }
-        )
-      end
-    end)
   end
 
   defp parse_json("\n"), do: nil
   defp parse_json(string), do: Jason.decode!(string)
 
-  defp parse_movie(nil), do: nil
+  defp parse_person(nil), do: nil
 
-  defp parse_movie(map) do
-    props =
-      [
-        # director
-        "P57",
-        # screenwriter
-        "P58",
-        # cast
-        "P161",
-        # prod.
-        "P162",
-        # exec. prod.
-        "P1431"
-      ]
-      |> Enum.reduce([], fn prop, acc ->
-        acc
-        |> Enum.concat(get_props(prop, map))
-      end)
-      |> Enum.uniq()
-
+  defp parse_person(map) do
     # Result
-    adult_movie = !is_nil(get_prop("P5083", map))
-
     result = %{
       "label" => parse_labels(Map.get(map, "labels", [])),
       "description" => parse_labels(Map.get(map, "descriptions", [])),
-      "wikidata_id" => Map.get(map, "id"),
-      "omdb_id" => get_prop("P3302", map) |> to_integer(),
-      "imdb_id" => get_prop("P345", map),
-      "sfdb_id" => get_prop("P2334", map),
-      "themoviedb_id" => get_prop("P4947", map) |> to_integer(),
-      "freebase_id" => get_prop("P646", map),
-      "elonet_id" => get_prop("P2346", map) |> to_integer(),
-      "website" => get_prop("P856", map),
-      "adult" => adult_movie
+      "wikidata_id" => Map.get(map, "id")
     }
 
     {_, res} =
@@ -261,20 +137,8 @@ defmodule WikidataBot.MovieParser do
         end
       end)
 
-    # Relations
-    relations = %{
-      "director" => get_props("P57", map),
-      "writer" => get_props("P58", map),
-      "cast" => get_props("P161", map),
-      "producer" => get_props("P162", map),
-      "exec_producer" => get_props("P1431", map)
-    }
-
     # Return
-    {
-      res,
-      relations
-    }
+    res
   end
 
   defp parse_labels(list) do
@@ -328,7 +192,7 @@ defmodule WikidataBot.MovieParser do
     base = MetagraphSDK.new()
 
     %GraphqlBuilder.Query{
-      operation: :films,
+      operation: :people,
       fields: [:uid],
       variables: [query: wid, query_field: "wikidata_id"]
     }
@@ -339,7 +203,7 @@ defmodule WikidataBot.MovieParser do
       headers: [authorization: "Bearer #{base.token}"]
     )
     |> case do
-      {:ok, %{body: %{"data" => %{"films" => result}}}} ->
+      {:ok, %{body: %{"data" => %{"people" => result}}}} ->
         (List.first(result) || %{})
         |> Map.get("uid")
 

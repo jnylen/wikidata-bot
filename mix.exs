@@ -26,7 +26,8 @@ defmodule WikidataBot.MixProject do
       {:metagraph_sdk, github: "pixelmonster-ou/metagraph-sdk"},
       {:jason, "~> 1.2"},
       {:jaxon, "~> 2.0.0-alpha"},
-      {:flow, "~> 1.0"}
+      {:flow, "~> 1.0"},
+      {:tesla, "~> 1.4"}
     ]
   end
 end
