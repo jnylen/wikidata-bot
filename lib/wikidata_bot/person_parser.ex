@@ -189,26 +189,7 @@ defmodule WikidataBot.PersonParser do
   defp to_integer(_), do: nil
 
   def get_item(wid) do
-    base = MetagraphSDK.new()
-
-    %GraphqlBuilder.Query{
-      operation: :people,
-      fields: [:uid],
-      variables: [query: wid, query_field: "wikidata_id"]
-    }
-    |> GraphqlBuilder.query()
-    |> Neuron.query(
-      %{},
-      url: base.url,
-      headers: [authorization: "Bearer #{base.token}"]
-    )
-    |> case do
-      {:ok, %{body: %{"data" => %{"people" => result}}}} ->
-        (List.first(result) || %{})
-        |> Map.get("uid")
-
-      _ ->
-        nil
-    end
+    "media.wikidata_id"
+    |> WikidataBot.Client.query_item(wid)
   end
 end

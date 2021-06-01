@@ -13,7 +13,7 @@ defmodule WikidataBot.Client do
 
   def create_item(type, data) when is_map(data) do
     post(
-      "/custom/create",
+      "/api/create",
       %{
         "type" => type,
         "values" => data
@@ -25,11 +25,23 @@ defmodule WikidataBot.Client do
 
   def update_item(uid, data) when is_map(data) do
     post(
-      "/custom/update",
+      "/api/update",
       %{
         "uid" => uid,
         "values" => data
       }
     )
+  end
+
+  def query_item(field, value) do
+    get("/api/query?field=#{field}&value=#{value}")
+    |> case do
+      {:ok, %{body: %{"uids" => values}}} ->
+        values
+        |> List.first()
+
+      _ ->
+        nil
+    end
   end
 end
